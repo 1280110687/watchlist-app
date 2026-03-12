@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="追番管理器" />
+  <title>追番管理器</title>
+  <link rel="manifest" href="./manifest.json" />
+  <style>
+    *{box-sizing:border-box}
+    :root{--bg:#0f172a;--panel:#1e293b;--panel2:#020617;--text:#fff;--sub:#94a3b8;--green:#22c55e;--blue:#3b82f6;--indigo:#6366f1;--orange:#f59e0b;--red:#ef4444;--cyan:#06b6d4;--radius:16px}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+    body{min-height:100vh}.wrap{max-width:760px;margin:0 auto;padding:14px 14px 28px}
+    .topbar{position:sticky;top:0;z-index:10;background:linear-gradient(180deg, rgba(15,23,42,.98), rgba(15,23,42,.88));backdrop-filter: blur(10px);padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+    .title{font-size:22px;font-weight:800;text-align:center}.sub{text-align:center;color:var(--sub);font-size:12px;margin-top:4px}
+    .card{background:var(--panel);border-radius:var(--radius);padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.18);margin-top:14px}
+    .row{display:grid;grid-template-columns:1fr;gap:10px}
+    input,select,button{width:100%;border:0;border-radius:12px;font-size:16px;padding:13px 14px;outline:none}
+    input,select{background:#fff;color:#111827}button{color:#fff;font-weight:700}.btn-add{background:var(--green)}
+    .tool-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.btn-cyan{background:var(--cyan)}.search{margin-top:12px}
+    .stats{margin-top:12px;text-align:center;color:var(--sub);font-size:13px}.section{margin-top:18px}.section h3{margin:0 0 10px;font-size:18px}
+    .item{background:var(--panel2);border-radius:14px;padding:12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.05)}
+    .name{font-size:17px;font-weight:800;line-height:1.35}.count{color:#cbd5e1;font-weight:600}.meta{margin-top:4px;color:var(--sub);font-size:12px}
+    .action-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.action-grid button,.action-grid select{padding:10px 6px;font-size:14px;border-radius:10px}
+    .btn-blue{background:var(--blue)}.btn-indigo{background:var(--indigo)}.btn-orange{background:var(--orange)}.btn-red{background:var(--red)}
+    .empty{text-align:center;color:var(--sub);padding:26px 12px;background:rgba(255,255,255,.03);border-radius:14px}
+    .tip{margin-top:12px;color:var(--sub);font-size:12px;line-height:1.55}.install-tip{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(6,182,212,.14);color:#cffafe;font-size:12px;display:none}
+    @media (max-width:380px){.action-grid{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="title">📺 追番管理器</div><div class="sub">PWA 版 · 自动保存 · 可加到桌面</div></div>
+  <div class="wrap">
+    <div class="card">
+      <div class="row">
+        <input id="name" placeholder="输入剧名 / 动漫名" />
+        <input id="count" type="number" inputmode="numeric" placeholder="当前看到第几集" />
+        <select id="status">
+          <option value="watching">🔥 正在追</option>
+          <option value="waiting">⏳ 等更新</option>
+          <option value="done">✅ 已完结</option>
+          <option value="plan">📌 想看</option>
+        </select>
+        <button class="btn-add" id="addBtn">➕ 新增记录</button>
+      </div>
+      <input class="search" id="search" placeholder="🔍 搜索剧名" />
+      <div class="tool-row" style="margin-top:10px;">
+        <button class="btn-cyan" id="exportBtn">📤 导出备份</button>
+        <button class="btn-cyan" id="importBtn">📥 导入备份</button>
+      </div>
+      <div class="install-tip" id="installTip"></div>
+      <div class="tip">建议：部署到线上后，用 Chrome / Samsung Internet 打开，然后“添加到主屏幕”，会比本地 HTML 稳定很多。</div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div id="app"></div>
+  </div>
+<script>
+const STORAGE_KEY = "watchlist_pwa_v1";
+let deferredPrompt = null;
+let data = [];
+function load(){try{data=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");if(!Array.isArray(data))data=[]}catch(e){data=[]}}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));render()}
+function formatDate(ts){if(!ts)return"";const d=new Date(ts);const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,"0");const day=String(d.getDate()).padStart(2,"0");const hh=String(d.getHours()).padStart(2,"0");const mm=String(d.getMinutes()).padStart(2,"0");return `${y}-${m}-${day} ${hh}:${mm}`}
+function statusText(v){return {watching:"正在追",waiting:"等待更新",done:"已完结",plan:"想看"}[v]||"未分类"}
+function addItem(){const nameEl=document.getElementById("name");const countEl=document.getElementById("count");const statusEl=document.getElementById("status");const name=nameEl.value.trim();if(!name){alert("请输入名称");return}const item={id:Date.now()+Math.floor(Math.random()*1000),name,count:parseInt(countEl.value||"0",10)||0,status:statusEl.value,createdAt:Date.now(),updatedAt:Date.now()};data.unshift(item);nameEl.value="";countEl.value="";save()}
+function changeCount(id,step){const item=data.find(v=>v.id===id);if(!item)return;item.count=Math.max(0,(item.count||0)+step);item.updatedAt=Date.now();save()}
+function editName(id){const item=data.find(v=>v.id===id);if(!item)return;const name=prompt("修改名称",item.name);if(name&&name.trim()){item.name=name.trim();item.updatedAt=Date.now();save()}}
+function removeItem(id){const item=data.find(v=>v.id===id);if(!item)return;if(!confirm(`删除《${item.name}》？`))return;data=data.filter(v=>v.id!==id);save()}
+function changeStatus(id,value){const item=data.find(v=>v.id===id);if(!item)return;item.status=value;item.updatedAt=Date.now();save()}
+function exportData(){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="watchlist_backup.json";a.click();URL.revokeObjectURL(a.href)}
+function importData(){const input=document.createElement("input");input.type="file";input.accept="application/json,.json";input.onchange=(e)=>{const file=e.target.files&&e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const incoming=JSON.parse(reader.result);if(!Array.isArray(incoming))throw new Error("bad json");data=incoming;save();alert("导入成功")}catch(err){alert("导入失败：文件格式不对")}};reader.readAsText(file,"utf-8")};input.click()}
+function section(title,list){if(!list.length){return `<div class="section"><h3>${title}</h3><div class="empty">暂无记录</div></div>`}return `<div class="section"><h3>${title}</h3>${list.map(item=>`<div class="item"><div><div class="name">${escapeHtml(item.name)} <span class="count">— ${item.count||0}</span></div><div class="meta">状态：${statusText(item.status)} · 最近更新：${formatDate(item.updatedAt)}</div></div><div class="action-grid"><button class="btn-blue" onclick="changeCount(${item.id},1)">+1</button><button class="btn-indigo" onclick="changeCount(${item.id},10)">+10</button><button class="btn-orange" onclick="editName(${item.id})">改名</button><button class="btn-red" onclick="removeItem(${item.id})">删除</button><select onchange="changeStatus(${item.id}, this.value)"><option value="watching" ${item.status==="watching"?"selected":""}>追</option><option value="waiting" ${item.status==="waiting"?"selected":""}>等</option><option value="done" ${item.status==="done"?"selected":""}>完</option><option value="plan" ${item.status==="plan"?"selected":""}>想</option></select></div></div>`).join("")}</div>`}
+function escapeHtml(str){return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;")}
+function render(){const keyword=(document.getElementById("search").value||"").trim().toLowerCase();const list=[...data].filter(v=>String(v.name||"").toLowerCase().includes(keyword)).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));const groups={watching:list.filter(v=>v.status==="watching"),waiting:list.filter(v=>v.status==="waiting"),done:list.filter(v=>v.status==="done"),plan:list.filter(v=>v.status==="plan")};document.getElementById("app").innerHTML=section("🔥 正在追",groups.watching)+section("⏳ 等更新",groups.waiting)+section("✅ 已完结",groups.done)+section("📌 想看",groups.plan);document.getElementById("stats").innerText=`共 ${data.length} 部`}
+document.getElementById("addBtn").addEventListener("click",addItem);document.getElementById("exportBtn").addEventListener("click",exportData);document.getElementById("importBtn").addEventListener("click",importData);document.getElementById("search").addEventListener("input",render);
+window.addEventListener("beforeinstallprompt",(e)=>{e.preventDefault();deferredPrompt=e;const tip=document.getElementById("installTip");tip.style.display="block";tip.innerHTML="检测到可安装：浏览器菜单里点“添加到主屏幕”即可。"});
+if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{})})}
+load();render();
+</script>
+</body>
+</html>
